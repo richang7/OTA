@@ -1,0 +1,8 @@
+{
+  "device_type": "raspberrypi",
+  "version": "2.0.0",
+  "filename": "rootfs.img",
+  "size": 43,
+  "sha256": "145a7ef470cf433869d42f618ee7539754c840b03fe4fbbe13bce5f733ec9320",
+  "md5": "ec76d50e57221685fbea1a77970cb41f"
+}

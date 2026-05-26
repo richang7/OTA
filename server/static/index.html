@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OTA 管理面板</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: #f5f5f5; color: #333; padding: 20px; }
+        h1 { text-align: center; margin-bottom: 24px; color: #1a1a2e; }
+        .container { max-width: 900px; margin: 0 auto; }
+        .card { background: #fff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); padding: 20px; margin-bottom: 20px; }
+        .card h2 { margin-bottom: 16px; color: #16213e; border-bottom: 2px solid #0f3460; padding-bottom: 8px; }
+        label { display: block; margin-bottom: 4px; font-weight: 600; font-size: 14px; }
+        input, select { width: 100%; padding: 8px 12px; border: 1px solid #ccc; border-radius: 4px; margin-bottom: 12px; font-size: 14px; }
+        button { background: #0f3460; color: #fff; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; font-size: 14px; }
+        button:hover { background: #16213e; }
+        button:disabled { background: #999; cursor: not-allowed; }
+        table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+        th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid #eee; font-size: 13px; }
+        th { background: #f0f0f0; font-weight: 600; }
+        .msg { padding: 8px 12px; border-radius: 4px; margin-top: 8px; font-size: 13px; }
+        .msg-ok { background: #d4edda; color: #155724; }
+        .msg-err { background: #f8d7da; color: #721c24; }
+        .row { display: flex; gap: 12px; }
+        .row > div { flex: 1; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>OTA 管理面板</h1>
+
+    <!-- 登记工件 -->
+    <div class="card">
+        <h2>登记工件</h2>
+        <div id="regMsg"></div>
+        <div class="row">
+            <div>
+                <label>设备类型</label>
+                <input id="regDeviceType" value="raspberrypi" />
+            </div>
+            <div>
+                <label>版本号</label>
+                <input id="regVersion" value="2.0.0" />
+            </div>
+        </div>
+        <div class="row">
+            <div>
+                <label>文件名</label>
+                <input id="regFilename" value="rootfs.img" />
+            </div>
+            <div>
+                <label>文件大小</label>
+                <input id="regSize" type="number" value="1024" />
+            </div>
+        </div>
+        <div class="row">
+            <div>
+                <label>SHA-256</label>
+                <input id="regSha256" placeholder="64位十六进制" />
+            </div>
+            <div>
+                <label>MD5</label>
+                <input id="regMd5" placeholder="32位十六进制" />
+            </div>
+        </div>
+        <button onclick="registerArtifact()">登记</button>
+    </div>
+
+    <!-- 创建部署 -->
+    <div class="card">
+        <h2>创建部署</h2>
+        <div id="depMsg"></div>
+        <div class="row">
+            <div>
+                <label>工件 ID</label>
+                <input id="depArtifactId" placeholder="art-xxxxxxxxxxxx" />
+            </div>
+            <div>
+                <label>设备类型</label>
+                <input id="depDeviceType" value="raspberrypi" />
+            </div>
+        </div>
+        <button onclick="createDeployment()">创建</button>
+    </div>
+
+    <!-- 工件列表 -->
+    <div class="card">
+        <h2>工件列表</h2>
+        <button onclick="loadArtifacts()" style="margin-bottom:12px">刷新</button>
+        <table>
+            <thead><tr><th>ID</th><th>设备类型</th><th>版本</th><th>文件名</th><th>SHA-256</th><th>创建时间</th></tr></thead>
+            <tbody id="artifactsBody"></tbody>
+        </table>
+    </div>
+
+    <!-- 部署列表 -->
+    <div class="card">
+        <h2>部署列表</h2>
+        <button onclick="loadDeployments()" style="margin-bottom:12px">刷新</button>
+        <table>
+            <thead><tr><th>ID</th><th>工件 ID</th><th>设备类型</th><th>目标版本</th><th>创建时间</th></tr></thead>
+            <tbody id="deploymentsBody"></tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+const API = window.location.origin;
+
+function showMsg(elId, text, ok) {
+    const el = document.getElementById(elId);
+    el.className = 'msg ' + (ok ? 'msg-ok' : 'msg-err');
+    el.textContent = text;
+}
+
+async function registerArtifact() {
+    const body = {
+        device_type: document.getElementById('regDeviceType').value,
+        version: document.getElementById('regVersion').value,
+        filename: document.getElementById('regFilename').value,
+        size: parseInt(document.getElementById('regSize').value),
+        sha256: document.getElementById('regSha256').value,
+        md5: document.getElementById('regMd5').value,
+    };
+    try {
+        const res = await fetch(API + '/api/v1/admin/artifacts/register', {
+            method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showMsg('regMsg', '登记成功: ' + data.id, true);
+            document.getElementById('depArtifactId').value = data.id;
+            loadArtifacts();
+        } else {
+            showMsg('regMsg', '失败: ' + (data.detail?.message || JSON.stringify(data.detail)), false);
+        }
+    } catch(e) { showMsg('regMsg', '请求失败: ' + e, false); }
+}
+
+async function createDeployment() {
+    const body = {
+        artifact_id: document.getElementById('depArtifactId').value,
+        device_type: document.getElementById('depDeviceType').value,
+    };
+    try {
+        const res = await fetch(API + '/api/v1/admin/deployments', {
+            method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)
+        });
+        const data = await res.json();
+        if (res.ok) {
+            showMsg('depMsg', '部署创建成功: ' + data.id, true);
+            loadDeployments();
+        } else {
+            showMsg('depMsg', '失败: ' + (data.detail?.message || JSON.stringify(data.detail)), false);
+        }
+    } catch(e) { showMsg('depMsg', '请求失败: ' + e, false); }
+}
+
+async function loadArtifacts() {
+    try {
+        const res = await fetch(API + '/api/v1/admin/artifacts');
+        const data = await res.json();
+        const tbody = document.getElementById('artifactsBody');
+        tbody.innerHTML = data.map(a => `<tr><td>${a.id}</td><td>${a.device_type}</td><td>${a.version}</td><td>${a.filename}</td><td title="${a.sha256}">${a.sha256.substring(0,12)}...</td><td>${a.created_at}</td></tr>`).join('');
+    } catch(e) {}
+}
+
+async function loadDeployments() {
+    try {
+        const res = await fetch(API + '/api/v1/admin/deployments');
+        const data = await res.json();
+        const tbody = document.getElementById('deploymentsBody');
+        tbody.innerHTML = data.map(d => `<tr><td>${d.id}</td><td>${d.artifact_id}</td><td>${d.device_type}</td><td>${d.target_version}</td><td>${d.created_at}</td></tr>`).join('');
+    } catch(e) {}
+}
+
+loadArtifacts();
+loadDeployments();
+</script>
+</body>
+</html>

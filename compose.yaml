@@ -1,0 +1,17 @@
+version: "3.8"
+
+services:
+  ota-server:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./firmware_repo:/app/firmware_repo
+      - ./keys:/app/keys
+      - ota-db:/app/data
+    environment:
+      - DB_PATH=/app/data/ota.db
+    command: uvicorn server.main:app --host 0.0.0.0 --port 8000
+
+volumes:
+  ota-db:
